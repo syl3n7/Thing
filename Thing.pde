@@ -10,16 +10,23 @@ int collectedBalls = 0;
 String deathText = "Game Over";
 String displayText = "";
 int textIndex = 0;
-int levelTimer;
+boolean animatingDown = false;
+float downSpeed = 2;
+float moveDownRemaining = 0;
+// Grid & enemy constants
+int ENEMY_W = 28;
+int ENEMY_H = 20;
+int ENEMY_GAP = 8;
+int VERTICAL_SPACING = ENEMY_H + ENEMY_GAP;
 
 void setup() 
 {
     surface.setTitle("Thing by syl3n7");
     
-    noSmooth();
+    smooth(8);
     size(500, 500);
     pixelDensity(2);
-    frameRate(60);
+    frameRate(144);
 
     float playerW = 25;
     float playerH = 25;
@@ -27,7 +34,6 @@ void setup()
     lg = new LevelGenerator();
     lg.generate(level);
     p.resetBalls(collectedBalls);
-    levelTimer = 60 * 60;
 }
 
 void draw()
@@ -37,13 +43,6 @@ void draw()
     {
         p.moveme();
         p.drawme(collectedBalls);
-        
-        // Display timer
-        int timeLeft = ceil(levelTimer / 60.0);
-        fill(255, 255, 0); // Yellow for visibility
-        textSize(20);
-        textAlign(RIGHT);
-        text("Time: " + timeLeft, width - 10, 50);
         
         // Check collisions
         for (Enemy en : enemies)
@@ -67,71 +66,80 @@ void draw()
             }
         }
         
-        for(Enemy en : enemies) { en.drawme(); }
+        for(Enemy en : enemies) { en.update(); en.drawme(); }
         
-        // Draw and check static balls
+        // Draw and check static balls with catch animation
         for(int i = staticBalls.size()-1; i >= 0; i--)
         {
             Balls sb = staticBalls.get(i);
-            circle(sb.posx, sb.posy, sb.diameter);
-            for(Balls b : p.balls)
+            // update any animation
+            sb.update(p.posx + p.w/2, p.posy);
+            if (sb.destroyed)
             {
-                if (b.fired && dist(b.posx, b.posy, sb.posx, sb.posy) < (b.diameter + sb.diameter)/2 )
+                // finalize catch
+                p.addBall(sb.posx, sb.posy, sb.diameter, sb.speed);
+                collectedBalls++;
+                staticBalls.remove(i);
+                continue;
+            }
+            fill(0, 200, 255, sb.caught ? map(sb.catchTimer, 10, 0, 255, 0) : 255); // Aqua to stand out
+            circle(sb.posx, sb.posy, sb.diameter);
+            fill(255);
+            if (!sb.caught)
+            {
+                for(Balls b : p.balls)
                 {
-                    p.addBall(sb.posx, sb.posy, sb.diameter, sb.speed);
-                    collectedBalls++;
-                    staticBalls.remove(i);
-                    break;
+                    if (b.fired && dist(b.posx, b.posy, sb.posx, sb.posy) < (b.diameter + sb.diameter)/2 )
+                    {
+                        // start catch animation
+                        sb.caught = true;
+                        sb.catchTimer = 10;
+                        break;
+                    }
                 }
             }
         }
         
-        // Remove dead enemies
+        // Remove destroyed enemies
         for(int i = enemies.size()-1; i >= 0; i--)
         {
-            if (!enemies.get(i).alive)
+            if (enemies.get(i).destroyed)
             {
                 enemies.remove(i);
             }
         }
         
-        // Check level progression
-        boolean allDead = true;
-        for (Enemy en : enemies)
+        // Check if all balls are back to player
+        boolean allBallsBack = true;
+        for (Balls b : p.balls)
         {
-            if (en.alive)
+            if (b.fired || b.attracting)
             {
-                allDead = false;
+                allBallsBack = false;
                 break;
             }
         }
-        if (allDead)
+        if (p.firedThisLevel && p.ballsLaunched > 0 && allBallsBack && !animatingDown)
         {
-            level++;
-            // Move existing enemies up
-            int moveUp = 10 + 8;
-            for (Enemy en : enemies)
-            {
-                en.posy -= moveUp;
-            }
-            lg.generate(level);
-            levelTimer = 60 * 60 + level * 10 * 60;
-            p.resetBalls(collectedBalls);
+            animatingDown = true;
+            moveDownRemaining = VERTICAL_SPACING;
         }
         
-        // Update timer
-        levelTimer--;
-        if (levelTimer <= 0)
+        // Animate moving down
+        if (animatingDown)
         {
-            level++;
-            // Move existing enemies up
-            int moveUp = 10 + 8;
             for (Enemy en : enemies)
             {
-                if (en.alive) en.posy -= moveUp;
+                en.posy += downSpeed;
             }
-            lg.generate(level);
-            levelTimer = 60 * 60 + level * 10 * 60;
+            moveDownRemaining -= downSpeed;
+            if (moveDownRemaining <= 0)
+            {
+                animatingDown = false;
+                level++;
+                lg.generate(level);
+                p.resetBalls(collectedBalls);
+            }
         }
     }
     else
@@ -142,6 +150,21 @@ void draw()
             displayText += deathText.charAt(textIndex);
             textIndex++;
         }
+        
+        // Debug overlay HUD
+        fill(0, 0, 0, 120);
+        rect(5, 5, 230, 156);
+        fill(255);
+        textSize(12);
+        textAlign(LEFT);
+        text("Lvl: " + level, 10, 20);
+        text("Enemies: " + enemies.size(), 10, 36);
+        text("Static: " + staticBalls.size(), 10, 52);
+        text("FiredThisLevel: " + p.firedThisLevel, 10, 68);
+        text("BallsLaunched: " + p.ballsLaunched, 10, 84);
+        text("CanFire: " + p.canFire, 10, 100);
+        text("AnimatingDown: " + animatingDown, 10, 116);
+        text("AllBallsBack: " + allBallsBack, 10, 132);
         textAlign(CENTER);
         textSize(24);
         fill(255);
@@ -161,12 +184,14 @@ void keyPressed()
         p.resetBalls(collectedBalls);
         displayText = "";
         textIndex = 0;
-        levelTimer = 60 * 60;
     }
 }
 
 void mousePressed() 
 {
     //println("mouse pressed");
-    p.fireBall();
+    if (!animatingDown)
+    {
+        p.fireBall();
+    }
 }

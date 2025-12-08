@@ -15,6 +15,7 @@ class Player
     PVector fireDir;
     boolean firedThisLevel = false;
     int baseBalls = 10;
+    int ballsLaunched = 0; // Track how many balls launched this round
 
     Player (float posx, float posy, float w, float h)
     {
@@ -44,6 +45,7 @@ class Player
         firing = false;
         canFire = true;
         firedThisLevel = false;
+        ballsLaunched = 0;
         for (int i = 0; i < baseBalls + extra; i++)
         {
             balls.add(new Balls(posx + w/2, posy, 10, 5));
@@ -75,6 +77,8 @@ class Player
             {
                 balls.get(nextBall).velocity = fireDir.copy().mult(balls.get(nextBall).speed);
                 balls.get(nextBall).fired = true;
+                if (ballsLaunched == 0) firedThisLevel = true; // only mark as fired when first ball actually launches
+                ballsLaunched++; // increment
                 nextBall++;
                 lastFireFrame = frameCount;
             }
@@ -87,12 +91,12 @@ class Player
         // Draw balls
         for (Balls b : balls)
         {
-            if (!b.fired)
+            if (!b.fired && !b.attracting)
             {
                 b.posx = posx + w/2;
                 b.posy = posy;
             }
-            b.update();
+            b.update(posx + w/2, posy);
             b.drawme();
         }
     }
@@ -104,17 +108,18 @@ class Player
             PVector mousePos = new PVector(mouseX, mouseY);
             PVector firePos = new PVector(posx + w/2, posy);
             fireDir = PVector.sub(mousePos, firePos);
+            if (fireDir.mag() < 0.01) return; // don't start firing if the aim is too close to player
             fireDir.normalize();
             firing = true;
             nextBall = 0;
             lastFireFrame = frameCount;
-            firedThisLevel = true;
         }
     }
 
     void moveme()
     {
-        if (keyPressed) {
+        if (keyPressed)
+        {
             if (key == 'a' || key == 'A') {
                 posx -= speed;
             } else if (key == 'd' || key == 'D') {
@@ -123,4 +128,5 @@ class Player
         }
         posx = constrain(posx, 0, width - w);
     }
+}
 }
