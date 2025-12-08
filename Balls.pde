@@ -7,6 +7,7 @@ class Balls
     float speed;
     PVector velocity;
     boolean fired;
+    boolean isStatic = false;
 
     Balls (float posx, float posy, float diameter, float speed)
     {
@@ -20,6 +21,7 @@ class Balls
 
     void drawme()
     {
+        fill(255, 0, 0); // Red for visibility
         circle(posx, posy, diameter);
     }
 
@@ -44,13 +46,18 @@ class Balls
                 posy = diameter/2;
             }
             
-            // If off bottom, reset (or remove)
-            if (posy - diameter/2 > height)
+            // Bounce off bottom
+            if (posy + diameter/2 > height)
             {
-                fired = false;
-                posx = 0; // or reset to player position
-                posy = 0;
-                velocity.set(0, 0);
+                velocity.y *= -1;
+                posy = height - diameter/2;
+            }
+            
+            // Bounce off top
+            if (posy - diameter/2 < 0)
+            {
+                velocity.y *= -1;
+                posy = diameter/2;
             }
         }
     }

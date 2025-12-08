@@ -5,11 +5,16 @@ class Player
     float posy;
     float w;
     float h;
-    Balls[] balls;
     int nextBall;
     boolean firing = false;
     int fireDelayFrames = 2; // Delay for one ball to travel its own diameter (10 units at speed 5 = 2 frames)
     int lastFireFrame = 0;
+    ArrayList<Balls> balls = new ArrayList<Balls>();
+    float speed = 5; // Movement speed
+    boolean canFire = true;
+    PVector fireDir;
+    boolean firedThisLevel = false;
+    int baseBalls = 10;
 
     Player (float posx, float posy, float w, float h)
     {
@@ -17,18 +22,37 @@ class Player
         this.posy = posy;
         this.w = w;
         this.h = h;
-        this.balls = new Balls[10]; // Array of 10 balls
+        // balls is already declared as ArrayList
         this.nextBall = 0;
         
         // Initialize balls at player position
-        for (int i = 0; i < balls.length; i++) 
+        for (int i = 0; i < 10; i++) 
         {
-            balls[i] = new Balls(posx + w/2, posy, 10, 5); // diameter 10, speed 5
+            balls.add(new Balls(posx + w/2, posy, 10, 5)); // diameter 10, speed 5
         }
     }
 
-    void drawme()
+    void addBall(float posx, float posy, float diameter, float speed)
     {
+        balls.add(new Balls(posx, posy, diameter, speed));
+    }
+
+    void resetBalls(int extra)
+    {
+        balls.clear();
+        nextBall = 0;
+        firing = false;
+        canFire = true;
+        firedThisLevel = false;
+        for (int i = 0; i < baseBalls + extra; i++)
+        {
+            balls.add(new Balls(posx + w/2, posy, 10, 5));
+        }
+    }
+
+    void drawme(int collected)
+    {
+        fill(255);
         rect(posx, posy, w, h);
         
         // Draw aim line to mouse
@@ -36,15 +60,21 @@ class Player
         line(posx + w/2, posy, mouseX, mouseY);
         noStroke();
         
+        // Draw ball count
+        fill(0);
+        textSize(12);
+        textAlign(LEFT);
+        text("(x" + baseBalls + " + " + collected + ")", posx + w + 5, posy + h/2);
+        
+        // Handle sequential firing with delay
+        
         // Handle sequential firing with delay
         if (firing && frameCount - lastFireFrame > fireDelayFrames) 
         {
-            if (nextBall < balls.length) 
+            if (nextBall < balls.size()) 
             {
-                PVector dir = new PVector(mouseX - (posx + w/2), mouseY - posy);
-                dir.normalize();
-                balls[nextBall].velocity = dir.mult(balls[nextBall].speed);
-                balls[nextBall].fired = true;
+                balls.get(nextBall).velocity = fireDir.copy().mult(balls.get(nextBall).speed);
+                balls.get(nextBall).fired = true;
                 nextBall++;
                 lastFireFrame = frameCount;
             }
@@ -57,6 +87,11 @@ class Player
         // Draw balls
         for (Balls b : balls)
         {
+            if (!b.fired)
+            {
+                b.posx = posx + w/2;
+                b.posy = posy;
+            }
             b.update();
             b.drawme();
         }
@@ -64,13 +99,28 @@ class Player
     
     void fireBall()
     {
-        firing = true;
-        nextBall = 0;
-        lastFireFrame = frameCount;
+        if (canFire && !firedThisLevel)
+        {
+            PVector mousePos = new PVector(mouseX, mouseY);
+            PVector firePos = new PVector(posx + w/2, posy);
+            fireDir = PVector.sub(mousePos, firePos);
+            fireDir.normalize();
+            firing = true;
+            nextBall = 0;
+            lastFireFrame = frameCount;
+            firedThisLevel = true;
+        }
     }
 
     void moveme()
     {
-
+        if (keyPressed) {
+            if (key == 'a' || key == 'A') {
+                posx -= speed;
+            } else if (key == 'd' || key == 'D') {
+                posx += speed;
+            }
+        }
+        posx = constrain(posx, 0, width - w);
     }
 }

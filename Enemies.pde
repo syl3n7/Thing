@@ -1,14 +1,15 @@
-class Enemies
+class Enemy
 {
-  //posx, posy, w, h, balls, ismoving
+  //posx, posy, w, h
   float posx;
   float posy;
   float w;
   float h;
-  ArrayList<Balls> balls = new ArrayList<Balls>();
-  boolean ismoving;
+  boolean alive = true;
+  int hits = 0;
+  int maxHits = 2;
 
-  Enemies (float posx, float posy, float w, float h)
+  Enemy (float posx, float posy, float w, float h)
   {
     this.posx = posx;
     this.posy = posy;
@@ -17,22 +18,32 @@ class Enemies
     
   }
 
-  void drawme()
+  void hit()
   {
-      rect(posx, posy, w, h);
-  }
-
-  void drawBalls()
-  {
-    for (Balls b : balls)
+    hits--;
+    if (hits <= 0)
     {
-      b.drawme();
+      alive = false;
     }
   }
 
-  void addBall(float posx, float posy, float diameter, float speed)
+  void drawme()
   {
-    balls.add(new Balls(posx, posy, diameter, speed));
+      if (alive)
+      {
+        if (maxHits >= 50)
+        {
+          fill(255, 0, 0); // Red for bosses
+        }
+        else
+        {
+          fill(255); // White for normal
+        }
+        rect(posx, posy, w, h);
+        fill(0); // Black text
+        textSize(12);
+        textAlign(CENTER);
+        text(str(hits), posx + w/2, posy + h/2 + 4);
+      }
   }
-
 }
