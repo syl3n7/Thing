@@ -32,10 +32,10 @@ boolean allBallsBack = true;
 void setup() 
 {
     // Load sound files (place these .wav files in your sketch folder)
-    sndPickup = new SoundFile(this, "pickup.wav");
-    sndEnemyGone = new SoundFile(this, "enemy_gone.wav");
-    sndEnemyHit = new SoundFile(this, "enemy_hit.wav");
-    sndSpawn = new SoundFile(this, "spawn.wav");
+    sndPickup = new SoundFile(this, "spawn.mp3");
+    sndEnemyGone = new SoundFile(this, "enemy_hit.mp3");
+    sndEnemyHit = new SoundFile(this, "enemy_hit.mp3");
+    sndSpawn = new SoundFile(this, "spawn.mp3");
     
     smooth(8);
     size(500, 500);
