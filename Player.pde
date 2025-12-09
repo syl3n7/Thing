@@ -129,4 +129,3 @@ class Player
         posx = constrain(posx, 0, width - w);
     }
 }
-}

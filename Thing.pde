@@ -1,4 +1,6 @@
 import java.awt.*;
+import java.util.ArrayList;
+import processing.core.PVector;
 
 Player p;
 ArrayList<Enemy> enemies = new ArrayList<Enemy>();
@@ -18,6 +20,7 @@ int ENEMY_W = 28;
 int ENEMY_H = 20;
 int ENEMY_GAP = 8;
 int VERTICAL_SPACING = ENEMY_H + ENEMY_GAP;
+boolean allBallsBack = true;
 
 void setup() 
 {
@@ -34,6 +37,80 @@ void setup()
     lg = new LevelGenerator();
     lg.generate(level);
     p.resetBalls(collectedBalls);
+}
+
+// Compute a predicted path from a starting point along a normalized direction directionDir
+// steps size determines the simulation resolution; maxHits indicates how many enemy collisions to simulate
+ArrayList<PVector> computePredictedPath(PVector start, PVector directionDir, int maxHits, float stepSize)
+{
+    ArrayList<PVector> path = new ArrayList<PVector>();
+    PVector pos = start.copy();
+    PVector v = directionDir.copy().normalize().mult(stepSize);
+    path.add(pos.copy());
+    int hits = 0;
+    int maxSteps = 2000;
+    float radius = (p.balls.size() > 0) ? p.balls.get(0).diameter/2 : 5;
+    for (int s = 0; s < maxSteps && hits < maxHits; s++)
+    {
+        PVector nextPos = PVector.add(pos, v);
+        boolean hitSomething = false;
+        // check collision with enemies
+        for (Enemy en : enemies)
+        {
+            if (!en.alive) continue;
+            if (nextPos.x + radius >= en.posx && nextPos.x - radius <= en.posx + en.w && nextPos.y + radius >= en.posy && nextPos.y - radius <= en.posy + en.h)
+            {
+                // register collision at nextPos
+                path.add(nextPos.copy());
+                float centerX = en.posx + en.w/2;
+                float centerY = en.posy + en.h/2;
+                if (nextPos.x < centerX) v.x = -abs(v.x);
+                else v.x = abs(v.x);
+                if (nextPos.y < centerY) v.y = -abs(v.y);
+                else v.y = abs(v.y);
+                hitSomething = true;
+                hits++;
+                pos = nextPos.copy();
+                break;
+            }
+        }
+        if (hitSomething) continue;
+        // check screen bounds bounce (left/right/top); bottom stops simulation
+        if (nextPos.x - radius < 0)
+        {
+            nextPos.x = radius;
+            v.x *= -1;
+            path.add(nextPos.copy());
+            pos = nextPos.copy();
+            continue;
+        }
+        if (nextPos.x + radius > width)
+        {
+            nextPos.x = width - radius;
+            v.x *= -1;
+            path.add(nextPos.copy());
+            pos = nextPos.copy();
+            continue;
+        }
+        if (nextPos.y - radius < 0)
+        {
+            nextPos.y = radius;
+            v.y *= -1;
+            path.add(nextPos.copy());
+            pos = nextPos.copy();
+            continue;
+        }
+        // if bottom - stop prediction; ball magnetizes on bottom, so break
+        if (nextPos.y + radius > height)
+        {
+            path.add(nextPos.copy());
+            break;
+        }
+        // no collisions - continue
+        pos = nextPos.copy();
+    }
+    path.add(pos.copy());
+    return path;
 }
 
 void draw()
@@ -110,7 +187,7 @@ void draw()
         }
         
         // Check if all balls are back to player
-        boolean allBallsBack = true;
+        allBallsBack = true;
         for (Balls b : p.balls)
         {
             if (b.fired || b.attracting)
