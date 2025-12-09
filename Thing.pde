@@ -29,7 +29,7 @@ void setup()
     smooth(8);
     size(500, 500);
     pixelDensity(2);
-    frameRate(144);
+    frameRate(60);
 
     float playerW = 25;
     float playerH = 25;
