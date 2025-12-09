@@ -36,14 +36,13 @@ void setup()
     sndEnemyGone = new SoundFile(this, "enemy_gone.wav");
     sndEnemyHit = new SoundFile(this, "enemy_hit.wav");
     sndSpawn = new SoundFile(this, "spawn.wav");
-}
-{
-    surface.setTitle("Thing by syl3n7");
     
     smooth(8);
     size(500, 500);
     pixelDensity(2);
     frameRate(60);
+    
+    surface.setTitle("Thing by syl3n7");
 
     float playerW = 25;
     float playerH = 25;
@@ -356,7 +355,6 @@ void draw()
         text("AllBallsBack: " + allBallsBack, 10, 132);
         textAlign(CENTER);
         textSize(24);
-                                if (sndEnemyHit != null) sndEnemyHit.play();
         text(displayText, width/2, height/2);
         textSize(16);
         text("Press R to restart", width/2, height/2 + 30);
