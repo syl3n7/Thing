@@ -15,8 +15,6 @@ class Balls
     boolean destroyed = false;
     int defaultLife = 0;
     boolean attracting = false;
-    float targetX;
-    float targetY;
 
     Balls (float posx, float posy, float diameter, float speed)
     {
@@ -62,37 +60,33 @@ class Balls
         {
             posx += velocity.x;
             posy += velocity.y;
-            
             // Bounce off left/right walls
             if (posx - diameter/2 < 0 || posx + diameter/2 > width)
             {
                 velocity.x *= -1;
                 posx = constrain(posx, diameter/2, width - diameter/2);
             }
-            
             // Bounce off top
             if (posy - diameter/2 < 0)
             {
                 velocity.y *= -1;
                 posy = diameter/2;
             }
-            
             // Hit bottom - start attracting
             if (posy + diameter/2 > height)
             {
                 attracting = true;
                 fired = false;
-                targetX = playerX;
-                targetY = playerY;
             }
         }
         else if (attracting)
         {
-            PVector target = new PVector(targetX, targetY);
+            PVector target = new PVector(playerX, playerY);
             PVector current = new PVector(posx, posy);
             PVector dir = PVector.sub(target, current);
             float dist = dir.mag();
-            if (dist > 1)
+            float catchThreshold = max(10, diameter * 0.7); // larger threshold for catching
+            if (dist > catchThreshold)
             {
                 dir.normalize();
                 dir.mult(speed * 0.5);
@@ -102,8 +96,8 @@ class Balls
             else
             {
                 attracting = false;
-                posx = targetX;
-                posy = targetY;
+                posx = playerX;
+                posy = playerY;
                 velocity.set(0, 0);
             }
         }

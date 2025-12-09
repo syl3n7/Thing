@@ -1,3 +1,10 @@
+import processing.sound.*;
+// Sound objects
+SoundFile sndPickup, sndEnemyGone, sndEnemyHit, sndSpawn;
+// Fast-forward logic
+int lastActiveFrame = 0;
+int fastForwardThresholdFrames = 60 * 10; // 10 seconds at 60 fps
+boolean fastForwarding = false;
 import java.awt.*;
 import java.util.ArrayList;
 import processing.core.PVector;
@@ -23,6 +30,13 @@ int VERTICAL_SPACING = ENEMY_H + ENEMY_GAP;
 boolean allBallsBack = true;
 
 void setup() 
+{
+    // Load sound files (place these .wav files in your sketch folder)
+    sndPickup = new SoundFile(this, "pickup.wav");
+    sndEnemyGone = new SoundFile(this, "enemy_gone.wav");
+    sndEnemyHit = new SoundFile(this, "enemy_hit.wav");
+    sndSpawn = new SoundFile(this, "spawn.wav");
+}
 {
     surface.setTitle("Thing by syl3n7");
     
@@ -118,26 +132,90 @@ void draw()
     background(0);
     if (!gameOver)
     {
+        // Draw thick, dotted predicted trajectory line
+        if (!p.firedThisLevel && p.canFire)
+        {
+            PVector start = new PVector(p.posx + p.w/2, p.posy);
+            PVector dir = new PVector(mouseX - start.x, mouseY - start.y);
+            if (dir.mag() > 0.01)
+            {
+                ArrayList<PVector> path = computePredictedPath(start, dir, 3, 4); // 3 enemy bounces, step size 4
+                stroke(0, 255, 255);
+                strokeWeight(5);
+                float dotLen = 12;
+                float gapLen = 8;
+                for (int i = 0; i < path.size() - 1; i++)
+                {
+                    PVector a = path.get(i);
+                    PVector b = path.get(i+1);
+                    float segLen = dist(a.x, a.y, b.x, b.y);
+                    PVector dirSeg = PVector.sub(b, a).normalize();
+                    float drawn = 0;
+                    while (drawn < segLen)
+                    {
+                        float d1 = min(dotLen, segLen - drawn);
+                        float x1 = a.x + dirSeg.x * drawn;
+                        float y1 = a.y + dirSeg.y * drawn;
+                        float x2 = a.x + dirSeg.x * (drawn + d1);
+                        float y2 = a.y + dirSeg.y * (drawn + d1);
+                        line(x1, y1, x2, y2);
+                        drawn += d1 + gapLen;
+                    }
+                }
+                strokeWeight(1);
+                stroke(255);
+            }
+        }
+        boolean anyBallActive = false;
+        boolean anyBallHit = false;
         p.moveme();
         p.drawme(collectedBalls);
         
-        // Check collisions
+        // Improved: Check collisions using circle-rectangle collision and reflect velocity
         for (Enemy en : enemies)
         {
             if (en.alive)
             {
                 for (Balls b : p.balls)
                 {
-                    if (b.fired && b.posx >= en.posx && b.posx <= en.posx + en.w && b.posy >= en.posy && b.posy <= en.posy + en.h)
+                    if (b.fired)
                     {
-                        en.hit();
-                        // Bounce ball away from enemy center
-                        float centerX = en.posx + en.w/2;
-                        float centerY = en.posy + en.h/2;
-                        if (b.posx < centerX) b.velocity.x = -abs(b.velocity.x);
-                        else b.velocity.x = abs(b.velocity.x);
-                        if (b.posy < centerY) b.velocity.y = -abs(b.velocity.y);
-                        else b.velocity.y = abs(b.velocity.y);
+                        anyBallActive = true;
+                        // Find closest point on enemy rectangle to ball center
+                        float closestX = constrain(b.posx, en.posx, en.posx + en.w);
+                        float closestY = constrain(b.posy, en.posy, en.posy + en.h);
+                        float dx = b.posx - closestX;
+                        float dy = b.posy - closestY;
+                        float distSq = dx*dx + dy*dy;
+                        float radius = b.diameter/2;
+                        if (distSq <= radius*radius)
+                        {
+                            en.hit();
+                            anyBallHit = true;
+                            // Calculate collision normal
+                            PVector normal = new PVector(dx, dy);
+                            if (normal.magSq() == 0) {
+                                // Ball center is inside rectangle; pick largest penetration axis
+                                float left = abs(b.posx - en.posx);
+                                float right = abs(b.posx - (en.posx + en.w));
+                                float top = abs(b.posy - en.posy);
+                                float bottom = abs(b.posy - (en.posy + en.h));
+                                float minDist = min(min(left, right), min(top, bottom));
+                                if (minDist == left) normal = new PVector(-1, 0);
+                                else if (minDist == right) normal = new PVector(1, 0);
+                                else if (minDist == top) normal = new PVector(0, -1);
+                                else normal = new PVector(0, 1);
+                            } else {
+                                normal.normalize();
+                            }
+                            // Reflect velocity
+                            float dot = b.velocity.dot(normal);
+                            b.velocity = PVector.sub(b.velocity, PVector.mult(normal, 2 * dot));
+                            // Move ball out of collision
+                            float overlap = radius - sqrt(distSq) + 0.1;
+                            b.posx += normal.x * overlap;
+                            b.posy += normal.y * overlap;
+                        }
                     }
                 }
             }
@@ -151,12 +229,25 @@ void draw()
             Balls sb = staticBalls.get(i);
             // update any animation
             sb.update(p.posx + p.w/2, p.posy);
-            if (sb.destroyed)
+            // If the static ball is close enough to the player, catch it immediately
+            float playerCatchX = p.posx + p.w/2;
+            float playerCatchY = p.posy;
+            float catchDist = (sb.diameter + 10) / 2 + 2; // 10 is player ball diameter, add small buffer
+            if (dist(sb.posx, sb.posy, playerCatchX, playerCatchY) < catchDist)
             {
-                // finalize catch
                 p.addBall(sb.posx, sb.posy, sb.diameter, sb.speed);
                 collectedBalls++;
                 staticBalls.remove(i);
+                if (sndPickup != null) sndPickup.play();
+                continue;
+            }
+            if (sb.destroyed)
+            {
+                // finalize catch (fallback)
+                p.addBall(sb.posx, sb.posy, sb.diameter, sb.speed);
+                collectedBalls++;
+                staticBalls.remove(i);
+                if (sndPickup != null) sndPickup.play();
                 continue;
             }
             fill(0, 200, 255, sb.caught ? map(sb.catchTimer, 10, 0, 255, 0) : 255); // Aqua to stand out
@@ -176,12 +267,33 @@ void draw()
                 }
             }
         }
+
+        // Fast-forward logic: if no ball hit for 10 seconds, attract all balls
+        if (anyBallHit) {
+            lastActiveFrame = frameCount;
+            fastForwarding = false;
+        }
+        if (anyBallActive && !anyBallHit && frameCount - lastActiveFrame > fastForwardThresholdFrames) {
+            // Fast-forward: attract all balls
+            for (Balls b : p.balls) {
+                if (b.fired) {
+                    b.fired = false;
+                    b.attracting = true;
+                }
+            }
+            fastForwarding = true;
+        }
+        if (!anyBallActive) {
+            lastActiveFrame = frameCount;
+            fastForwarding = false;
+        }
         
         // Remove destroyed enemies
         for(int i = enemies.size()-1; i >= 0; i--)
         {
             if (enemies.get(i).destroyed)
             {
+                if (sndEnemyGone != null) sndEnemyGone.play();
                 enemies.remove(i);
             }
         }
@@ -244,7 +356,7 @@ void draw()
         text("AllBallsBack: " + allBallsBack, 10, 132);
         textAlign(CENTER);
         textSize(24);
-        fill(255);
+                                if (sndEnemyHit != null) sndEnemyHit.play();
         text(displayText, width/2, height/2);
         textSize(16);
         text("Press R to restart", width/2, height/2 + 30);
