@@ -1,3 +1,28 @@
+// Spawns a particle at a random location, not overlapping enemies or static balls
+void spawnParticle() {
+    int tries = 100;
+    float r = 14;
+    boolean vertical = random(1) < 0.5;
+    for (int t = 0; t < tries; t++) {
+        float x = random(r, width-r);
+        float y = random(r, height-r-60); // avoid bottom UI
+        boolean overlap = false;
+        for (Enemy en : enemies) {
+            if (!en.alive) continue;
+            if (x > en.posx-r && x < en.posx+en.w+r && y > en.posy-r && y < en.posy+en.h+r) {
+                overlap = true; break;
+            }
+        }
+        for (Balls sb : staticBalls) {
+            float d = dist(x, y, sb.posx, sb.posy);
+            if (d < r + sb.diameter/2 + 2) { overlap = true; break; }
+        }
+        if (!overlap) {
+            particles.add(new Particle(x, y, r, vertical));
+            return;
+        }
+    }
+}
 import processing.sound.*;
 // Sound objects
 SoundFile sndPickup, sndEnemyGone, sndEnemyHit, sndSpawn;
@@ -5,9 +30,12 @@ SoundFile sndPickup, sndEnemyGone, sndEnemyHit, sndSpawn;
 int lastActiveFrame = 0;
 int fastForwardThresholdFrames = 60 * 10; // 10 seconds at 60 fps
 boolean fastForwarding = false;
+
 import java.awt.*;
 import java.util.ArrayList;
 import processing.core.PVector;
+
+ArrayList<Particle> particles = new ArrayList<Particle>();
 
 Player p;
 ArrayList<Enemy> enemies = new ArrayList<Enemy>();
@@ -50,6 +78,7 @@ void setup()
     lg = new LevelGenerator();
     lg.generate(level);
     p.resetBalls(collectedBalls);
+    spawnParticle();
 }
 
 // Compute a predicted path from a starting point along a normalized direction directionDir
@@ -131,6 +160,37 @@ void draw()
     background(0);
     if (!gameOver)
     {
+        // Draw particles
+        for (Particle pt : particles) pt.drawme();
+
+        // Check collision between balls and particles
+        for (int pi = particles.size()-1; pi >= 0; pi--) {
+            Particle pt = particles.get(pi);
+            if (!pt.active) continue;
+            for (Balls b : p.balls) {
+                if (b.fired) {
+                    float d = dist(b.posx, b.posy, pt.x, pt.y);
+                    if (d < pt.r + b.diameter/2) {
+                        // Particle hit!
+                        pt.flashTimer = 15; // flash green for 15 frames
+                        // Eliminate enemies in same row or column (every hit)
+                        for (Enemy en : enemies) {
+                            if (!en.alive) continue;
+                            if (pt.vertical) {
+                                // Up/down arrows: eliminate same column
+                                float enCenterX = en.posx + en.w/2.0;
+                                if (abs(enCenterX - pt.x) < ENEMY_W/2.0) en.hit();
+                            } else {
+                                // Left/right arrows: eliminate same row
+                                float enCenterY = en.posy + en.h/2.0;
+                                if (abs(enCenterY - pt.y) < ENEMY_H/2.0) en.hit();
+                            }
+                        }
+                        // Do not break, allow multiple balls to trigger effect in same frame
+                    }
+                }
+            }
+        }
         // Draw thick, dotted predicted trajectory line
         if (!p.firedThisLevel && p.canFire)
         {
@@ -312,7 +372,7 @@ void draw()
             animatingDown = true;
             moveDownRemaining = VERTICAL_SPACING;
         }
-        
+
         // Animate moving down
         if (animatingDown)
         {
@@ -327,6 +387,8 @@ void draw()
                 level++;
                 lg.generate(level);
                 p.resetBalls(collectedBalls);
+                particles.clear();
+                spawnParticle();
             }
         }
     }
