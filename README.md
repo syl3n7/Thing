@@ -106,5 +106,3 @@ processing-java --sketch=/path/to/Thing --run
 This project is released under the **MIT License** — see the `LICENSE` file for details.
 
 ---
-
-If you'd like, I can add a short `CONTRIBUTING.md`, a screenshot, or a small `CHANGELOG.md` — tell me which you'd prefer.
